@@ -1,0 +1,25 @@
+name: Atualizar Dados
+on:
+  schedule:
+    - cron: '0 8 * * *' # Isso significa: "execute todo dia às 08:00"
+  workflow_dispatch:   # Isso permite que você teste o robô agora, clicando num botão
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with: {python-version: '3.9'}
+      - name: Instalar bibliotecas
+        run: pip install requests pandas
+      - name: Rodar o robô (coleta)
+        run: python coleta_chik.py
+      - name: Salvar no GitHub
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git add chikungunya_atualizado.csv
+          git commit -m "Auto-update: Dados de Chikungunya" || echo "Sem mudanças"
+          git push
