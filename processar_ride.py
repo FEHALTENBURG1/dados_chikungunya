@@ -198,4 +198,3 @@ if __name__ == "__main__":
     except Exception as e:
         log.error("ERRO FATAL: %s: %s", type(e).__name__, e)
         sys.exit(1)
-
