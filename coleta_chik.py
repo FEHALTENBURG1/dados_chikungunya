@@ -1,24 +1,41 @@
-import requests
-import pandas as pd
-import time
+import os
+import zipfile
+from ftplib import FTP
+import io
 
-def buscar_dados():
-    url = "https://apidadosabertos.saude.gov.br/arboviroses/chikungunya"
-    params = {'nu_ano': '2026', 'limit': 100, 'offset': 0}
-    todos_dados = []
-    
-    while True:
-        resp = requests.get(url, params=params)
-        if resp.status_code == 200 and resp.json():
-            pagina = resp.json()
-            todos_dados.extend(pagina)
-            params['offset'] += 100
-            time.sleep(0.5) # Respeita a API
-        else:
-            break
-            
-    df = pd.DataFrame(todos_dados)
-    df.to_csv("chikungunya_atualizado.csv", index=False)
+def baixar_e_descompactar_chikungunya():
+    ftp_host = "ftp.datasus.gov.br"
+    ftp_path = "/dissemin/publicos/Dados_Abertos/SINAN/Chikungunya/csv/"
+    destino = "./dados_chikungunya"
+
+    if not os.path.exists(destino):
+        os.makedirs(destino)
+
+    try:
+        ftp = FTP(ftp_host)
+        ftp.login()
+        ftp.cwd(ftp_path)
+        
+        arquivos = ftp.nlst()
+        
+        for arquivo in arquivos:
+            if arquivo.endswith(".zip"):
+                print(f"Baixando e extraindo: {arquivo}...")
+                
+                with io.BytesIO() as bio:
+                    ftp.retrbinary(f"RETR {arquivo}", bio.write)
+                    bio.seek(0)
+                    
+                    with zipfile.ZipFile(bio) as zf:
+                        zf.extractall(destino)
+                
+                print(f"Concluído: {arquivo}")
+                    
+        ftp.quit()
+        print("Tudo pronto!")
+        
+    except Exception as e:
+        print(f"Erro: {e}")
 
 if __name__ == "__main__":
-    buscar_dados()
+    baixar_e_descompactar_chikungunya()
