@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """
-Filtra os CSVs nacionais de Chikungunya (baixados por baixar_chikungunya.py)
-para os 34 municipios da RIDE-DF e grava um recorte enxuto em dados/.
+Filtra os CSVs nacionais de Chikungunya para os 34 municipios da RIDE-DF.
 
-Criterio de recorte: UNIAO — mantem a notificacao se o municipio de NOTIFICACAO
-(ID_MUNICIP) OU o de RESIDENCIA (ID_MN_RESI) pertencer a RIDE. As duas colunas
-sao preservadas separadamente para o painel escolher o denominador.
+Gera:
+  dados/chikungunya_ride.csv   -> recorte da RIDE (o painel le daqui)
+  dados/atraso_nacional.csv    -> curva de atraso de digitacao, base NACIONAL
 
-Mantem TODAS as notificacoes (nao filtra por CLASSI_FIN) — a classificacao fica
-disponivel para o painel filtrar.
+Sobre a curva de atraso: o nowcasting precisa da distribuicao F(d) = proporcao
+de casos ja digitados d dias apos o inicio dos sintomas. Estimar isso so com os
+~500 casos/ano da RIDE da um resultado instavel. O atraso e propriedade do
+SISTEMA de digitacao, nao da doenca, entao estimamos na base nacional (~100 mil
+casos/ano) e aplicamos a RIDE.
 
-Formato do Dados Abertos (verificado em CHIKBR26.csv):
-  - separador VIRGULA (nao ';' como no microdado .dbc)
-  - encoding UTF-8/ASCII (nao latin1)
-  - ID_MUNICIP / ID_MN_RESI com 6 digitos (IBGE sem digito verificador)
-  - datas em ISO (AAAA-MM-DD)
+SEMANA EPIDEMIOLOGICA — cuidado:
+  - A SE brasileira vai de DOMINGO a SABADO. NAO e a semana ISO (que comeca na
+    segunda). 85% dos registros divergem entre as duas convencoes.
+  - O campo SEM_PRI do DATASUS ja vem calculado na convencao brasileira.
+    USE-O DIRETO. Nunca recalcule com isocalendar()/lubridate::isoweek().
+  - SEM_PRI carrega o proprio ano: "202553" = SE 53 de 2025.
+  - NU_ANO e o ano da NOTIFICACAO, nao o ano epidemiologico. Um caso com
+    sintomas na SE 53/2025 notificado em janeiro/2026 tem NU_ANO=2026 e
+    SEM_PRI=202553. Agrupar por NU_ANO joga esse caso no ano errado.
+    => ANO_EPI vem de SEM_PRI[:4], nunca de NU_ANO.
 """
 
 import sys
@@ -27,37 +34,71 @@ from municipios_ride import CODIGOS_6, NOME_POR_COD6, UF_POR_COD6
 
 ENTRADA = Path("./bruto")
 SAIDA = Path("./dados")
-ARQUIVO_SAIDA = SAIDA / "chikungunya_ride.csv"
+ARQ_RIDE = SAIDA / "chikungunya_ride.csv"
+ARQ_ATRASO = SAIDA / "atraso_nacional.csv"
 
-# Colunas mantidas no recorte. Reduzir de 122 para o essencial derruba o tamanho
-# do arquivo em ~10x. Acrescente aqui o que o painel precisar.
+# Coortes com sintomas ha >= MATURIDADE dias tem o atraso ja completo.
+# Estimar F(d) com todos os casos enviesaria para atrasos curtos: os casos
+# lentos das semanas recentes ainda nao apareceram no arquivo (truncamento
+# a direita).
+MATURIDADE = 120
+D_MAX = 200
+
 COLUNAS = [
-    # identificacao temporal
+    # tempo
     "NU_ANO", "DT_NOTIFIC", "SEM_NOT", "DT_SIN_PRI", "SEM_PRI",
+    "DT_DIGITA",                      # necessaria para o nowcasting
     # lugar — as duas dimensoes, separadas
-    "SG_UF_NOT", "ID_MUNICIP",      # notificacao
-    "SG_UF", "ID_MN_RESI",          # residencia
+    "SG_UF_NOT", "ID_MUNICIP",
+    "SG_UF", "ID_MN_RESI",
     # pessoa
     "NU_IDADE_N", "CS_SEXO", "CS_GESTANT", "CS_RACA",
-    # desfecho e classificacao
+    # desfecho
     "CLASSI_FIN", "CRITERIO", "EVOLUCAO", "DT_OBITO", "DT_ENCERRA",
     "HOSPITALIZ", "DT_INVEST",
     # laboratorio
     "RES_CHIKS1", "RES_CHIKS2", "RESUL_PRNT", "RESUL_SORO", "RESUL_PCR_",
 ]
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
-)
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s [%(levelname)s] %(message)s",
+                    datefmt="%H:%M:%S")
 log = logging.getLogger("ride")
 
 
-def processar(caminho: Path) -> pd.DataFrame:
+def curva_atraso(nacional: pd.DataFrame, snapshot: pd.Timestamp) -> pd.DataFrame:
+    """F(d) na base nacional, estimada apenas em coortes maduras."""
+    d = nacional.dropna(subset=["_sintoma", "_digita"]).copy()
+    d["atraso"] = (d["_digita"] - d["_sintoma"]).dt.days
+    d = d[(d.atraso >= 0) & (d.atraso <= D_MAX)]
+
+    maduras = d[(snapshot - d["_sintoma"]).dt.days >= MATURIDADE]
+    log.info("  curva de atraso: %d casos maduros de %d nacionais",
+             len(maduras), len(d))
+
+    if len(maduras) < 1000:
+        log.warning("  poucas coortes maduras (%d). F(d) pode ser instavel.",
+                    len(maduras))
+    if maduras.empty:
+        raise RuntimeError("Nenhuma coorte madura. Baixe anos anteriores.")
+
+    n = len(maduras)
+    return pd.DataFrame({
+        "dias": range(D_MAX + 1),
+        "f": [(maduras.atraso <= dd).mean() for dd in range(D_MAX + 1)],
+        "n_base": n,
+    })
+
+
+def processar(caminho: Path):
     df = pd.read_csv(caminho, dtype=str, low_memory=False)
 
-    faltando = [c for c in ("ID_MUNICIP", "ID_MN_RESI") if c not in df.columns]
-    if faltando:
-        raise KeyError(f"{caminho.name}: colunas ausentes {faltando}. Layout mudou?")
+    for c in ("ID_MUNICIP", "ID_MN_RESI", "SEM_PRI"):
+        if c not in df.columns:
+            raise KeyError(f"{caminho.name}: coluna {c} ausente. Layout mudou?")
+
+    df["_sintoma"] = pd.to_datetime(df.get("DT_SIN_PRI"), errors="coerce")
+    df["_digita"] = pd.to_datetime(df.get("DT_DIGITA"), errors="coerce")
 
     mask = df["ID_MUNICIP"].isin(CODIGOS_6) | df["ID_MN_RESI"].isin(CODIGOS_6)
     ride = df[mask].copy()
@@ -65,65 +106,90 @@ def processar(caminho: Path) -> pd.DataFrame:
     cols = [c for c in COLUNAS if c in ride.columns]
     ausentes = set(COLUNAS) - set(cols)
     if ausentes:
-        log.warning("  %s: colunas pedidas mas ausentes: %s", caminho.name, sorted(ausentes))
+        log.warning("  %s: colunas ausentes: %s", caminho.name, sorted(ausentes))
     ride = ride[cols]
 
-    # Nomes legiveis, para o painel nao precisar de outra tabela de-para
+    # ---- Semana epidemiologica: SEMPRE derivada de SEM_PRI -----------------
+    ride["ANO_EPI"] = ride["SEM_PRI"].str[:4]
+    ride["SE"] = ride["SEM_PRI"].str[4:6]
+
+    # Quantos casos caem em ano epidemiologico != ano do arquivo?
+    ano_arq = ride["NU_ANO"].mode()
+    if len(ano_arq):
+        fora = (ride["ANO_EPI"] != ano_arq[0]).sum()
+        if fora:
+            log.info("  %s: %d casos com ANO_EPI != NU_ANO "
+                     "(sintomas no ano anterior) — atribuidos ao ano correto",
+                     caminho.name, fora)
+
     ride["MUN_NOTIF_NOME"] = ride["ID_MUNICIP"].map(NOME_POR_COD6)
     ride["MUN_RESI_NOME"] = ride["ID_MN_RESI"].map(NOME_POR_COD6)
     ride["MUN_RESI_UF"] = ride["ID_MN_RESI"].map(UF_POR_COD6)
-
-    # Flag util: o caso foi notificado fora do municipio onde mora?
-    ride["FORA_DO_MUN"] = (ride["ID_MUNICIP"] != ride["ID_MN_RESI"]).map({True: "1", False: "0"})
+    ride["FORA_DO_MUN"] = (ride["ID_MUNICIP"] != ride["ID_MN_RESI"]).map(
+        {True: "1", False: "0"})
 
     log.info("  %s: %6d nacionais -> %5d RIDE", caminho.name, len(df), len(ride))
-    return ride
+    return ride, df[["_sintoma", "_digita"]]
 
 
 def main() -> None:
     if not ENTRADA.exists():
-        raise FileNotFoundError(f"{ENTRADA}/ nao existe. Rode baixar_chikungunya.py antes.")
+        raise FileNotFoundError(f"{ENTRADA}/ nao existe. Rode baixar_chikungunya.py.")
 
     arquivos = sorted(ENTRADA.glob("CHIKBR*.csv"))
     if not arquivos:
         raise FileNotFoundError(f"Nenhum CHIKBR*.csv em {ENTRADA}/.")
 
-    partes = [processar(a) for a in arquivos]
+    partes, nacionais = [], []
+    for a in arquivos:
+        r, n = processar(a)
+        partes.append(r)
+        nacionais.append(n)
+
     ride = pd.concat(partes, ignore_index=True)
+    nacional = pd.concat(nacionais, ignore_index=True)
 
     if ride.empty:
-        # Recorte vazio significa que o formato do codigo de municipio mudou.
-        # Falhar aqui evita commitar um CSV vazio e congelar o painel.
         raise RuntimeError(
             "Recorte da RIDE ficou VAZIO. O formato de ID_MUNICIP mudou? "
-            "Esperado codigo IBGE de 6 digitos."
-        )
+            "Esperado codigo IBGE de 6 digitos.")
 
-    ride = ride.sort_values(["NU_ANO", "DT_NOTIFIC"], na_position="last")
+    snapshot = nacional["_digita"].max()
+    log.info("")
+    log.info("Snapshot do DATASUS (ultima digitacao): %s", snapshot.date())
+
+    atraso = curva_atraso(nacional, snapshot)
+    atraso["snapshot"] = snapshot.date().isoformat()
+
+    ride = ride.sort_values(["ANO_EPI", "SE"], na_position="last")
 
     SAIDA.mkdir(parents=True, exist_ok=True)
-    ride.to_csv(ARQUIVO_SAIDA, index=False, encoding="utf-8")
+    ride.to_csv(ARQ_RIDE, index=False, encoding="utf-8")
+    atraso.to_csv(ARQ_ATRASO, index=False, encoding="utf-8")
 
-    tam = ARQUIVO_SAIDA.stat().st_size / 1_048_576
+    tam = ARQ_RIDE.stat().st_size / 1_048_576
     log.info("")
-    log.info("Recorte: %d notificacoes | %.1f MB | %s", len(ride), tam, ARQUIVO_SAIDA)
-
+    log.info("Recorte: %d notificacoes | %.1f MB | %s", len(ride), tam, ARQ_RIDE)
     if tam > 50:
-        log.warning("Arquivo acima de 50 MB — cuidado com o limite de 100 MB do GitHub.")
+        log.warning("Acima de 50 MB — cuidado com o limite de 100 MB do GitHub.")
 
-    # Resumo por ano, util para conferir no log do Actions se um ano sumiu
     log.info("")
-    log.info("Por ano de notificacao:")
-    for ano, n in ride["NU_ANO"].value_counts().sort_index().items():
+    log.info("Por ano EPIDEMIOLOGICO (de SEM_PRI, nao de NU_ANO):")
+    for ano, n in ride["ANO_EPI"].value_counts().sort_index().items():
         log.info("  %s: %5d", ano, n)
 
-    # Municipios sem registro: esperado para os pequenos, mas se TODOS sumirem e bug
-    presentes = set(ride["ID_MN_RESI"].dropna()) | set(ride["ID_MUNICIP"].dropna())
-    sem_registro = sorted(NOME_POR_COD6[c] for c in CODIGOS_6 if c not in presentes)
     log.info("")
-    log.info("Municipios da RIDE sem nenhum registro: %d de 34", len(sem_registro))
-    if sem_registro:
-        log.info("  %s", ", ".join(sem_registro))
+    log.info("Atraso de digitacao (nacional, coortes maduras):")
+    for dias in (7, 14, 21, 28, 42):
+        f = atraso.loc[atraso.dias == dias, "f"].iloc[0]
+        log.info("  ate %2d dias: %5.1f%% digitado", dias, 100 * f)
+
+    presentes = set(ride["ID_MN_RESI"].dropna()) | set(ride["ID_MUNICIP"].dropna())
+    sem_reg = sorted(NOME_POR_COD6[c] for c in CODIGOS_6 if c not in presentes)
+    log.info("")
+    log.info("Municipios da RIDE sem nenhum registro: %d de 34", len(sem_reg))
+    if sem_reg:
+        log.info("  %s", ", ".join(sem_reg))
 
 
 if __name__ == "__main__":
@@ -132,3 +198,4 @@ if __name__ == "__main__":
     except Exception as e:
         log.error("ERRO FATAL: %s: %s", type(e).__name__, e)
         sys.exit(1)
+
