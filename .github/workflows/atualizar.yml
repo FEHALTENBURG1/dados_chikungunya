@@ -1,34 +1,41 @@
-name: Baixar Dados Chikungunya
+name: Atualizar Dados Chikungunya RIDE-DF
 
 on:
   schedule:
-    - cron: '0 0 * * 0'      # domingo, 00:00 UTC
+    - cron: '0 0 * * 0'
   workflow_dispatch:
 
 permissions:
-  contents: write            # sem isso o git push dá 403
+  contents: write
 
 jobs:
-  build:
+  atualizar:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout do repositório
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Configurar Python
-        uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Instalar dependências
-        run: pip install pandas
+      - run: pip install pandas
 
       - name: Baixar do FTP do DATASUS
         run: python baixar_chikungunya.py
 
-      # Enquanto o processar_ride.py não existe, o bruto NÃO vai pro Git.
-      # O step abaixo só confirma o que foi baixado.
-      - name: Conferir download
-        run: ls -lh bruto/
+      - name: Filtrar RIDE-DF
+        run: python processar_ride.py
+
+      - name: Commit e push
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add dados/
+          if git diff --staged --quiet; then
+            echo "Nada mudou nesta semana."
+          else
+            git commit -m "Dados chikungunya RIDE-DF ($(date -u +%Y-%m-%d))"
+            git push
+          fi
