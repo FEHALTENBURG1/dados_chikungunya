@@ -1,25 +1,33 @@
-name: Atualizar Dados
+name: Baixar Dados Chikungunya
+
 on:
   schedule:
-    - cron: '0 8 * * *' # Isso significa: "execute todo dia às 08:00"
-  workflow_dispatch:   # Isso permite que você teste o robô agora, clicando num botão
+    # Roda todo domingo às 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Permite rodar manualmente pelo botão no site do GitHub
 
 jobs:
-  atualizar:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout do repositório
+        uses: actions/checkout@v3
+
       - name: Configurar Python
         uses: actions/setup-python@v4
-        with: {python-version: '3.9'}
-      - name: Instalar bibliotecas
-        run: pip install requests pandas
-      - name: Rodar o robô (coleta)
-        run: python coleta_chik.py
-      - name: Salvar no GitHub
+        with:
+          python-version: '3.9'
+
+      - name: Executar script de download
         run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-          git add chikungunya_atualizado.csv
-          git commit -m "Auto-update: Dados de Chikungunya" || echo "Sem mudanças"
+          # Se o seu script precisar de alguma lib extra, instale aqui
+          # pip install pandas 
+          python seu_script.py # Substitua pelo nome do seu arquivo Python
+
+      - name: Commit e Push dos dados
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add ./dados_chikungunya/*
+          git commit -m "Atualização semanal dos dados de Chikungunya" || echo "Sem mudanças para commit"
           git push
