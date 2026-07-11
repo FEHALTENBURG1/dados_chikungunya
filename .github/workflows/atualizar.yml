@@ -11,13 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v3
+        # Atualizado de v3 para v4
+        uses: actions/checkout@v4
 
       - name: Configurar Python
-        uses: actions/setup-python@v4
+        # Atualizado de v4 para v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-
       - name: Executar script de download
         run: |
           # Se o seu script precisar de alguma lib extra, instale aqui
