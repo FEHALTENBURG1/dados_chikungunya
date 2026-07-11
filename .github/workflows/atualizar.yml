@@ -1,32 +1,34 @@
-- name: Baixar do FTP do DATASUS
-        run: python baixar_chikungunya.py
+name: Baixar Dados Chikungunya
+
 on:
   schedule:
-    # Roda todo domingo às 00:00 UTC
-    - cron: '0 0 * * 0'
-  workflow_dispatch: # Permite rodar manualmente pelo botão no site do GitHub
+    - cron: '0 0 * * 0'      # domingo, 00:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write            # sem isso o git push dá 403
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout do repositório
-        # Atualizado de v3 para v4
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configurar Python
-        # Atualizado de v4 para v5
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.9'
-      - name: Executar script de download
-        run:  pip install pandas 
-          python coleta_chik.py 
+          python-version: '3.12'
 
-      - name: Commit e Push dos dados
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add ./dados_chikungunya/*
-          git commit -m "Atualização semanal dos dados de Chikungunya" || echo "Sem mudanças para commit"
-          git push
+      - name: Instalar dependências
+        run: pip install pandas
+
+      - name: Baixar do FTP do DATASUS
+        run: python baixar_chikungunya.py
+
+      # Enquanto o processar_ride.py não existe, o bruto NÃO vai pro Git.
+      # O step abaixo só confirma o que foi baixado.
+      - name: Conferir download
+        run: ls -lh bruto/
