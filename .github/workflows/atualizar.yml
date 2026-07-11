@@ -23,7 +23,7 @@ jobs:
         run: |
           # Se o seu script precisar de alguma lib extra, instale aqui
           # pip install pandas 
-          python seu_script.py # Substitua pelo nome do seu arquivo Python
+          python coleta_chik.py 
 
       - name: Commit e Push dos dados
         run: |
