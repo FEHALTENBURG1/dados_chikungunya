@@ -26,7 +26,7 @@ FTP_PATH = "/dissemin/publicos/Dados_Abertos/SINAN/Chikungunya/csv/"
 DESTINO = Path("./bruto")          # fora do Git — ver .gitignore
 
 # Anos de interesse, com 4 digitos. Use None para baixar a serie completa.
-ANOS = [2023, 2024, 2025, 2026]
+ANOS = [2021, 2022, 2023, 2024, 2025, 2026]
 
 PADRAO = "CHIKBR{:02d}.csv.zip"    # DATASUS usa ano com 2 digitos: CHIKBR26.csv.zip
 
