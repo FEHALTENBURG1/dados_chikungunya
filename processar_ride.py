@@ -58,6 +58,13 @@ COLUNAS = [
     "HOSPITALIZ", "DT_INVEST",
     # laboratorio
     "RES_CHIKS1", "RES_CHIKS2", "RESUL_PRNT", "RESUL_SORO", "RESUL_PCR_",
+    # sinais e sintomas (aba clínica)
+    "FEBRE", "MIALGIA", "CEFALEIA", "ARTRALGIA", "ARTRITE", "EXANTEMA",
+    "DOR_RETRO", "NAUSEA", "VOMITO", "CONJUNTVIT",
+    # comorbidades (aba clínica)
+    "HIPERTENSA", "DIABETES", "RENAL", "AUTO_IMUNE", "HEPATOPAT",
+    "ACIDO_PEPT", "HEMATOLOG",
+
 ]
 
 logging.basicConfig(level=logging.INFO,
