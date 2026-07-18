@@ -2,11 +2,17 @@ name: Atualizar Dados Chikungunya RIDE-DF
 
 on:
   schedule:
-    - cron: '0 0 * * 0'
+    - cron: "0 0 * * 0"
+
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# Impede duas atualizações do painel de rodarem simultaneamente.
+concurrency:
+  group: atualizar-dados-chikungunya-main
+  cancel-in-progress: false
 
 jobs:
   atualizar:
@@ -14,28 +20,61 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v6
+      - name: Baixar repositório
+        uses: actions/checkout@v5
         with:
-          python-version: '3.12'
+          ref: main
+          fetch-depth: 0
 
-      - run: pip install pandas
+      - name: Configurar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-      - name: Baixar do FTP do DATASUS
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas
+
+      - name: Baixar dados de chikungunya
         run: python baixar_chikungunya.py
 
-      - name: Filtrar RIDE-DF
+      - name: Filtrar dados da RIDE-DF
         run: python processar_ride.py
 
       - name: Commit e push
+        shell: bash
         run: |
-          git config user.name  'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git add dados/
-          if git diff --staged --quiet; then
-            echo "Nada mudou nesta semana."
-          else
-            git commit -m "Dados chikungunya RIDE-DF ($(date -u +%Y-%m-%d))"
-            git push
+
+          if git diff --cached --quiet; then
+            echo "Nada mudou nesta atualização."
+            exit 0
           fi
+
+          git commit -m "Dados chikungunya RIDE-DF ($(date -u +%Y-%m-%d))"
+
+          # Atualiza o histórico local antes de enviar o commit.
+          # Faz até três tentativas caso outro commit entre durante o processo.
+          for tentativa in 1 2 3; do
+            echo "Tentativa de push ${tentativa}/3"
+
+            git fetch origin main
+            git rebase origin/main
+
+            if git push origin HEAD:main; then
+              echo "Dados publicados com sucesso."
+              exit 0
+            fi
+
+            echo "A branch mudou durante o push. Tentando novamente..."
+            sleep $((tentativa * 5))
+          done
+
+          echo "Não foi possível publicar após três tentativas."
+          exit 1
