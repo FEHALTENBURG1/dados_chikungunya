@@ -39,7 +39,7 @@ DESTINO = Path("./bruto")
 ANOS_FTP = [2021, 2022, 2023, 2024, 2025]
 
 URLS_HTTPS = {
-    2026: (https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR26.csv.zip)
+    2026: ("https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR26.csv.zip")
 }
 
 FTP_HOST = "ftp.datasus.gov.br"
