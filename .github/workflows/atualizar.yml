@@ -39,9 +39,16 @@ jobs:
       - name: Baixar dados de chikungunya
         run: python baixar_chikungunya.py
 
-      - name: Filtrar dados da RIDE-DF
-        run: python processar_ride.py
+     - name: Filtrar RIDE-DF
+  run: |
+    echo "=== Arquivos baixados ==="
+    ls -lh bruto/
 
+    echo "=== Cabeçalho do arquivo 2026 ==="
+    head -n 2 bruto/CHIKBR26.csv
+
+    echo "=== Processando ==="
+    python processar_ride.py
       - name: Commit e push
         shell: bash
         run: |
