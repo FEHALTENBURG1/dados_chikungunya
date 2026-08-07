@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
 
-# Impede duas atualizações do painel de rodarem simultaneamente.
+# Impede duas atualizações de rodarem simultaneamente
 concurrency:
   group: atualizar-dados-chikungunya-main
   cancel-in-progress: false
@@ -39,16 +39,17 @@ jobs:
       - name: Baixar dados de chikungunya
         run: python baixar_chikungunya.py
 
-     - name: Filtrar RIDE-DF
-  run: |
-    echo "=== Arquivos baixados ==="
-    ls -lh bruto/
+      - name: Filtrar RIDE-DF
+        run: |
+          echo "=== Arquivos baixados ==="
+          ls -lh bruto/
 
-    echo "=== Cabeçalho do arquivo 2026 ==="
-    head -n 2 bruto/CHIKBR26.csv
+          echo "=== Cabeçalho do arquivo 2026 ==="
+          head -n 2 bruto/CHIKBR26.csv
 
-    echo "=== Processando ==="
-    python processar_ride.py
+          echo "=== Processando ==="
+          python processar_ride.py
+
       - name: Commit e push
         shell: bash
         run: |
@@ -66,8 +67,6 @@ jobs:
 
           git commit -m "Dados chikungunya RIDE-DF ($(date -u +%Y-%m-%d))"
 
-          # Atualiza o histórico local antes de enviar o commit.
-          # Faz até três tentativas caso outro commit entre durante o processo.
           for tentativa in 1 2 3; do
             echo "Tentativa de push ${tentativa}/3"
 
