@@ -2,7 +2,8 @@ name: Atualizar Dados Chikungunya RIDE-DF
 
 on:
   schedule:
-    - cron: "0 0 * * 0"
+    - cron: "0 6 * * *"
+      timezone: "America/Sao_Paulo"
 
   workflow_dispatch:
 
