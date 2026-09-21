@@ -1,87 +1,37 @@
-name: Atualizar Dados Chikungunya RIDE-DF
+name: ETL Epidemiológico Chikungunya
 
 on:
   schedule:
-    - cron: "0 6 * * *"
-      timezone: "America/Sao_Paulo"
-
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-# Impede duas atualizações de rodarem simultaneamente
-concurrency:
-  group: atualizar-dados-chikungunya-main
-  cancel-in-progress: false
+    - cron: '0 4 * * *' # Executa diariamente às 04:00 UTC (01:00 BRT)
+  workflow_dispatch: # Permite a execução manual na aba "Actions"
 
 jobs:
-  atualizar:
+  processamento_estatistico:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
     steps:
-      - name: Baixar repositório
-        uses: actions/checkout@v5
+      - name: Checkout do repositório
+        uses: actions/checkout@v3
+
+      - name: Setup do ambiente R
+        uses: r-lib/actions/setup-r@v2
         with:
-          ref: main
-          fetch-depth: 0
+          r-version: '4.3.1'
 
-      - name: Configurar Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
+      - name: Instalar bibliotecas de sistema operacional (Dependências espaciais)
+        run: sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev
 
-      - name: Instalar dependências
+      - name: Instalar pacotes R
         run: |
-          python -m pip install --upgrade pip
-          pip install pandas
+          install.packages(c("dplyr", "readr", "jsonlite", "lubridate", "spdep", "sf"))
+        shell: Rscript {0}
 
-      - name: Baixar dados de chikungunya
-        run: python baixar_chikungunya.py
+      - name: Executar Pipeline Analítico
+        run: Rscript scripts/pipeline_smart.R
 
-      - name: Filtrar RIDE-DF
+      - name: Commit e Push do JSON Consolidado
         run: |
-          echo "=== Arquivos baixados ==="
-          ls -lh bruto/
-
-          echo "=== Cabeçalho do arquivo 2026 ==="
-          head -n 2 bruto/CHIKBR26.csv
-
-          echo "=== Processando ==="
-          python processar_ride.py
-
-      - name: Commit e push
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add dados/
-
-          if git diff --cached --quiet; then
-            echo "Nada mudou nesta atualização."
-            exit 0
-          fi
-
-          git commit -m "Dados chikungunya RIDE-DF ($(date -u +%Y-%m-%d))"
-
-          for tentativa in 1 2 3; do
-            echo "Tentativa de push ${tentativa}/3"
-
-            git fetch origin main
-            git rebase origin/main
-
-            if git push origin HEAD:main; then
-              echo "Dados publicados com sucesso."
-              exit 0
-            fi
-
-            echo "A branch mudou durante o push. Tentando novamente..."
-            sleep $((tentativa * 5))
-          done
-
-          echo "Não foi possível publicar após três tentativas."
-          exit 1
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_processed/painel_chik.json
+          git commit -m "🤖 Atualização automática do pipeline epidemiológico" || echo "Nenhuma alteração para comitar."
+          git push
