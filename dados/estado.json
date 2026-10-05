@@ -1,7 +1,7 @@
 {
   "anos": {
     "2021": {
-      "atualizado_em": "2026-10-05T16:11:29+00:00",
+      "atualizado_em": "2026-10-05T15:58:57+00:00",
       "etag": "ec1f38be39977c2b58789f01e5df9912",
       "last_modified": "Thu, 01 Oct 2026 19:47:28 GMT",
       "linhas_nacional": 128991,
@@ -9,7 +9,7 @@
       "snapshot": "2022-07-15"
     },
     "2022": {
-      "atualizado_em": "2026-10-05T16:11:32+00:00",
+      "atualizado_em": "2026-10-05T15:59:01+00:00",
       "etag": "be57e6a0f7a92649453bd1186bec8668",
       "last_modified": "Thu, 01 Oct 2026 19:47:29 GMT",
       "linhas_nacional": 274331,
@@ -17,7 +17,7 @@
       "snapshot": "2023-07-18"
     },
     "2023": {
-      "atualizado_em": "2026-10-05T16:11:35+00:00",
+      "atualizado_em": "2026-10-05T15:59:04+00:00",
       "etag": "ba9ebbff22e16a7aa8b8328dc37d43cb",
       "last_modified": "Thu, 01 Oct 2026 19:47:29 GMT",
       "linhas_nacional": 266442,
@@ -25,7 +25,7 @@
       "snapshot": "2024-06-04"
     },
     "2024": {
-      "atualizado_em": "2026-10-05T16:11:38+00:00",
+      "atualizado_em": "2026-10-05T15:59:07+00:00",
       "etag": "47a43b3767d37f93e973d2399e06c675-2",
       "last_modified": "Thu, 01 Oct 2026 19:47:30 GMT",
       "linhas_nacional": 426214,
@@ -33,7 +33,7 @@
       "snapshot": "2025-07-28"
     },
     "2025": {
-      "atualizado_em": "2026-10-05T16:11:41+00:00",
+      "atualizado_em": "2026-10-05T15:59:10+00:00",
       "etag": "f7e8709b472a4b754bf870cd8ca9ac18",
       "last_modified": "Thu, 01 Oct 2026 19:47:31 GMT",
       "linhas_nacional": 253753,
@@ -41,7 +41,7 @@
       "snapshot": "2026-07-07"
     },
     "2026": {
-      "atualizado_em": "2026-10-05T16:11:44+00:00",
+      "atualizado_em": "2026-10-05T16:41:06+00:00",
       "etag": "db00bdd1b130405fb95e89adb2371ac4",
       "last_modified": "Thu, 01 Oct 2026 19:47:31 GMT",
       "linhas_nacional": 130003,
