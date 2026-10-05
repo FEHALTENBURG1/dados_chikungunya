@@ -18,7 +18,10 @@ um "cache" por ano (dados/historico/) e, em cada execução:
 
 Saídas (mesmo formato de antes, nada muda para quem consome os dados):
   dados/chikungunya_ride.csv   notificações da RIDE-DF, todos os anos
-  dados/atraso_nacional.csv    curva de atraso de digitação F(d)
+  dados/atraso_nacional.csv    curva de atraso de digitação F(d), nacional
+  dados/atraso_ride.csv        curva de atraso local (notificações de residentes da RIDE)
+  dados/nowcast_ride.csv       notificações por semana: observado, estimado e IC 95%
+  dados/nowcast_validacao.csv  backtest: viés, erro e cobertura por método (ver nowcast.py)
 
 Cache (versionado no Git):
   dados/historico/ride_AAAA.parquet     recorte RIDE-DF já tratado, por ano do arquivo
@@ -53,6 +56,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
+import nowcast
 from municipios_ride import CODIGOS_6, NOME_POR_COD6, UF_POR_COD6
 
 # ---------------------------------------------------------------------------
@@ -70,6 +74,9 @@ HIST = SAIDA / "historico"
 ESTADO = SAIDA / "estado.json"
 ARQ_RIDE = SAIDA / "chikungunya_ride.csv"
 ARQ_ATRASO = SAIDA / "atraso_nacional.csv"
+ARQ_NOWCAST = SAIDA / "nowcast_ride.csv"
+ARQ_ATRASO_LOCAL = SAIDA / "atraso_ride.csv"
+ARQ_VALIDACAO = SAIDA / "nowcast_validacao.csv"
 
 TIMEOUT = 120
 TENTATIVAS = 4
@@ -386,6 +393,38 @@ def atualizar_ano(ano: int, meta: dict, estado: dict) -> None:
     }
 
 
+def gerar_nowcast(ride: pd.DataFrame, snapshot: pd.Timestamp, atraso_nacional: pd.DataFrame) -> None:
+    """Nowcast de notificações + validação retrospectiva. Falha aqui não derruba o resto."""
+    try:
+        base = nowcast.preparar(ride, CODIGOS_6)
+        ano_epi = max(base.semanas)[:4]
+        serie = nowcast.serie_atual(base, snapshot, ano_epi)
+        rng = nowcast.np.random.default_rng(nowcast.SEMENTE)
+        pont, _ = nowcast.curva_boot(base, snapshot, rng)
+        curva = pd.DataFrame({
+            "dias": range(nowcast.D + 1), "f": pont,
+            "n_coortes": len(nowcast.coortes_maduras(base, snapshot)),
+            "snapshot": snapshot.date().isoformat(),
+        })
+        bt = nowcast.backtest(base, snapshot, atraso_nacional)
+        validacao = nowcast.resumir(bt)
+        validacao["snapshot"] = snapshot.date().isoformat()
+    except Exception as erro:  # noqa: BLE001
+        log.error("Nowcast não gerado (%s: %s); demais saídas seguem.", type(erro).__name__, erro)
+        return
+
+    serie = serie[["ano_epi", "se", "sem", "fim_semana", "observado", "f", "estimado", "lo", "hi"]].copy()
+    serie["snapshot"] = snapshot.date().isoformat()
+    for arq, tab in ((ARQ_NOWCAST, serie), (ARQ_ATRASO_LOCAL, curva), (ARQ_VALIDACAO, validacao)):
+        gravar_atomico(arq, lambda p, t=tab: t.round(4).to_csv(p, index=False, encoding="utf-8"))
+    geral = validacao[validacao["faixa_dias_desde_fim_semana"] == "todas"].set_index("metodo")
+    for metodo, linha in geral.iterrows():
+        log.info(
+            "Backtest %-24s razão est/final %.2f | erro médio %.2f | cobertura IC95 %.0f%%",
+            metodo, linha["razao_estimado_final"], linha["erro_medio_abs"], 100 * linha["cobertura_ic95"],
+        )
+
+
 def montar_saidas(anos: list[int], estado: dict) -> None:
     """Junta os caches por ano e grava os CSVs consumidos pelo painel."""
     ride = pd.concat(
@@ -405,6 +444,7 @@ def montar_saidas(anos: list[int], estado: dict) -> None:
     log.info("Snapshot do DATASUS: %s", snapshot.date())
 
     atraso = curva_atraso(cont, snapshot)
+    atraso_nacional = atraso.copy()
     atraso["snapshot"] = snapshot.date().isoformat()
 
     ride = ride.sort_values(["ANO_EPI", "SE"], kind="stable", na_position="last")
@@ -412,6 +452,8 @@ def montar_saidas(anos: list[int], estado: dict) -> None:
     SAIDA.mkdir(parents=True, exist_ok=True)
     gravar_atomico(ARQ_RIDE, lambda p: ride.to_csv(p, index=False, encoding="utf-8"))
     gravar_atomico(ARQ_ATRASO, lambda p: atraso.to_csv(p, index=False, encoding="utf-8"))
+    gerar_nowcast(ride, snapshot, atraso_nacional)
+
     gravar_atomico(
         ESTADO,
         lambda p: p.write_text(
