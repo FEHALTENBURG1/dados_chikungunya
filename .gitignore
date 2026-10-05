@@ -1,1 +1,3 @@
 bruto/
+__pycache__/
+*.part
