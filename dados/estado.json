@@ -41,12 +41,12 @@
       "snapshot": "2026-07-07"
     },
     "2026": {
-      "atualizado_em": "2026-10-05T16:41:06+00:00",
-      "etag": "db00bdd1b130405fb95e89adb2371ac4",
-      "last_modified": "Thu, 01 Oct 2026 19:47:31 GMT",
-      "linhas_nacional": 130003,
-      "linhas_ride": 678,
-      "snapshot": "2026-09-20"
+      "atualizado_em": "2026-10-07T10:46:27+00:00",
+      "etag": "16ae78956ac2f0111e143c47e9e161a7",
+      "last_modified": "Tue, 06 Oct 2026 20:10:20 GMT",
+      "linhas_nacional": 131830,
+      "linhas_ride": 693,
+      "snapshot": "2026-09-27"
     }
   }
 }
